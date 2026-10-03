@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Kamal Desktop Manager",
+  "version": "0.1.0",
+  "identifier": "dev.kdm.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Kamal Desktop Manager",
+        "width": 1100,
+        "height": 750
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true,
+    "category": "DeveloperTool",
+    "shortDescription": "Desktop monitor for Kamal apps",
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "11.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEwMTdEMkU2NjA2MTNBOTgKUldTWU9tRmc1dElYRVBSNjMyQVpSSC9zQVU4bFZTeUFnQkhSVlRSQXdUZDNVaXhoUTNtZE0rV0MK",
+      "endpoints": [
+        "https://github.com/rslhdyt/kdm-releases/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

@@ -1,0 +1,7 @@
+[tools]
+node = "24"
+rust = "stable"
+
+[tasks.build-local]
+description = "Build Kamal Desktop Manager.app for local use (no updater artifacts)"
+run = """pnpm tauri build --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'"""

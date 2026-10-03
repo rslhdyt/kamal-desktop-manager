@@ -1,0 +1,106 @@
+# Builds Kamal Desktop Manager on a v* tag and publishes it, with the updater's latest.json,
+# to the public rslhdyt/kdm-releases repo.
+#
+# Required secrets:
+#   RELEASES_TOKEN                      fine-grained PAT: Contents read/write on rslhdyt/kdm-releases
+#   TAURI_SIGNING_PRIVATE_KEY           updater key (~/.tauri/kdm.key)
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+# Optional (macOS signing + notarization; builds are ad-hoc signed without them):
+#   APPLE_CERTIFICATE                   base64 Developer ID Application .p12
+#   APPLE_CERTIFICATE_PASSWORD
+#   APPLE_SIGNING_IDENTITY              e.g. "Developer ID Application: Name (TEAMID)"
+#   APPLE_API_ISSUER, APPLE_API_KEY     App Store Connect API key issuer + key id
+#   APPLE_API_PRIVATE_KEY               contents of AuthKey_<id>.p8
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches app version
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != v$version in tauri.conf.json"; exit 1; }
+
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - run: pnpm install --frozen-lockfile
+
+      # Unset secrets arrive as empty strings, which Tauri would try to use;
+      # only export the Apple variables when a certificate is configured.
+      - name: Apple signing
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "::warning::No Apple certificate configured; building ad-hoc signed, not notarized."
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+          } >> "$GITHUB_ENV"
+          if [ -n "$APPLE_API_PRIVATE_KEY" ]; then
+            key="$RUNNER_TEMP/AuthKey_$APPLE_API_KEY.p8"
+            printf '%s' "$APPLE_API_PRIVATE_KEY" > "$key"
+            {
+              echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+              echo "APPLE_API_KEY=$APPLE_API_KEY"
+              echo "APPLE_API_KEY_PATH=$key"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          owner: rslhdyt
+          repo: kdm-releases
+          tagName: ${{ github.ref_name }}
+          releaseName: Kamal Desktop Manager ${{ github.ref_name }}
+          releaseBody: Download the build for your platform below. Installed apps update themselves.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
