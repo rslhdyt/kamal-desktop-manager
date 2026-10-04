@@ -1,8 +1,7 @@
 # Builds Kamal Desktop Manager on a v* tag and publishes it, with the updater's latest.json,
-# to the public rslhdyt/kdm-releases repo.
+# as a release of this repo.
 #
 # Required secrets:
-#   RELEASES_TOKEN                      fine-grained PAT: Contents read/write on rslhdyt/kdm-releases
 #   TAURI_SIGNING_PRIVATE_KEY           updater key (~/.tauri/kdm.key)
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 # Optional (macOS signing + notarization; builds are ad-hoc signed without them):
@@ -20,7 +19,7 @@ on:
 jobs:
   release:
     permissions:
-      contents: read
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -100,12 +99,10 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          owner: rslhdyt
-          repo: kdm-releases
           tagName: ${{ github.ref_name }}
           releaseName: Kamal Desktop Manager ${{ github.ref_name }}
           releaseBody: ${{ steps.notes.outputs.body }}

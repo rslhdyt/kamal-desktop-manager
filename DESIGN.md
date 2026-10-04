@@ -166,4 +166,4 @@ in `ProjectView` is the destination as it appears on container labels; use it wh
   path against a real project: `KDM_PROJECT=/path/to/app cargo test live_spike -- --ignored --nocapture`.
 - `pnpm build` runs `tsc` and vite; it must pass before a change is done.
 - Releases are tagged `v*`, built by `.github/workflows/release.yml` for macOS and Linux, signed for the Tauri updater,
-  and published to `kdm-releases`. See README.
+  and published as a release of this repo. See README.

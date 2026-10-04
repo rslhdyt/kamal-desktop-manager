@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a Kamal Desktop Manager release end to end — pick the semver bump, write CHANGELOG.md, open the release PR, tag after merge, watch the build publish to kdm-releases, verify the updater feed and downloads, then update the release notes on kdm-site. Use when the user types /release or asks to release, ship, cut or tag a new version of kdm.
+description: Cut a Kamal Desktop Manager release end to end — pick the semver bump, write CHANGELOG.md, open the release PR, tag after merge, watch the build publish the GitHub release, verify the updater feed and downloads, then update the release notes on kdm-site. Use when the user types /release or asks to release, ship, cut or tag a new version of kdm.
 argument-hint: "[patch|minor|major|x.y.z]"
 disable-model-invocation: true
 ---
@@ -19,9 +19,9 @@ How the pieces fit:
   the GitHub release body and the notes in the updater's `latest.json` (see the "Release notes" step in
   `.github/workflows/release.yml`).
 - Pushing a `v*` tag runs `release.yml`, which fails unless the tag matches `tauri.conf.json`, then builds macOS
-  (arm64, x64) and Linux and publishes them to the public `rslhdyt/kdm-releases` repo. Installed apps update from
+  (arm64, x64) and Linux and publishes them as a release of this repo. Installed apps update from
   `releases/latest/download/latest.json`, so **a published release goes out to every user**.
-- kdm-site redirects `/download/*` to the newest kdm-releases assets on its own. Its `/changelog` page and the version
+- kdm-site redirects `/download/*` to the newest release's assets on its own. Its `/changelog` page and the version
   in the download section come from `src/CHANGELOG.md`, a copy of this repo's changelog.
 
 ## Ground rules
@@ -41,7 +41,7 @@ Run these and stop on any failure:
 git switch main && git pull --ff-only
 git status --porcelain                  # must be empty
 gh auth status
-gh secret list                          # needs TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD, RELEASES_TOKEN
+gh secret list                          # needs TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 git -C ../kdm-site status --porcelain   # must be empty
 gh pr list --state open                 # anything here that should go in first?
 ```
@@ -136,19 +136,19 @@ gh run watch <run-id> --exit-status               # ~15–25 min; run it in the 
 ```
 
 If a job fails, get the log with `gh run view <run-id> --log-failed` and diagnose. What to do next depends on whether
-anything was published (`gh release view vX.Y.Z -R rslhdyt/kdm-releases`):
+anything was published (`gh release view vX.Y.Z`):
 
 - **Nothing published:** fix it on a branch through a PR, then move the tag to the fixed commit, after the user
   confirms: `git push --delete origin vX.Y.Z && git tag -d vX.Y.Z`, then repeat step 6.
 - **A partial release was published** (one platform failed): re-run the failed job with `gh run rerun <run-id> --failed`.
-  If it fails again, ask the user whether to delete the partial release and its tag in kdm-releases or to leave it and
+  If it fails again, ask the user whether to delete the partial release and its tag or to leave it and
   ship a patch.
 
 ## 8. Verify the release
 
 ```sh
-gh release view vX.Y.Z -R rslhdyt/kdm-releases --json assets,body --jq '.assets[].name, .body'
-curl -sL https://github.com/rslhdyt/kdm-releases/releases/latest/download/latest.json
+gh release view vX.Y.Z --json assets,body --jq '.assets[].name, .body'
+curl -sL https://github.com/rslhdyt/kamal-desktop-manager/releases/latest/download/latest.json
 curl -sI https://kdm.rslhdyt.dev/download/mac-arm | grep -i '^location'
 curl -sI https://kdm.rslhdyt.dev/download/mac-intel | grep -i '^location'
 ```
@@ -193,7 +193,7 @@ curl -s https://kdm.rslhdyt.dev/changelog | grep -c 'X.Y.Z'
 Report:
 
 - the version
-- links to the kdm-releases release, the kdm and kdm-site PRs, and https://kdm.rslhdyt.dev/changelog
+- links to the GitHub release, the kdm and kdm-site PRs, and https://kdm.rslhdyt.dev/changelog
 - anything skipped or left open, such as site copy that still needs updating, an unchecked smoke test, or a missing
   notarization warning from the build
 

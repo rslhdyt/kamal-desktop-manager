@@ -27,14 +27,14 @@ Run `/release` in Claude Code (`.claude/skills/release/SKILL.md`), which goes th
    `Cargo.lock`, and dates the changelog section. Land it through a `Release vX.Y.Z` PR.
 3. Tag the merged commit and push: `git tag -a vX.Y.Z -m "Kamal Desktop Manager vX.Y.Z" && git push origin vX.Y.Z`.
 4. `.github/workflows/release.yml` builds macOS (arm64, x64) and Linux and publishes them, with the updater's
-   `latest.json`, to the public [kdm-releases](https://github.com/rslhdyt/kdm-releases) repo. The release
+   `latest.json`, as a [release of this repo](https://github.com/rslhdyt/kamal-desktop-manager/releases). The release
    notes are the version's `CHANGELOG.md` section. Installed apps pick the update up on next launch.
 5. Copy `CHANGELOG.md` to kdm-site's `src/CHANGELOG.md` and deploy it, so https://kdm.rslhdyt.dev/changelog shows the
    release.
 
 Secrets on this repo: `TAURI_SIGNING_PRIVATE_KEY` / `_PASSWORD` (updater key, kept in `~/.tauri/kdm.key`; losing it
-means existing installs can't verify new updates) and `RELEASES_TOKEN` (fine-grained PAT with Contents read/write on
-kdm-releases). macOS signing and notarization turn on when the `APPLE_*` secrets listed in the workflow are set;
-until then builds are ad-hoc signed.
+means existing installs can't verify new updates). The workflow publishes with the built-in `GITHUB_TOKEN`. macOS
+signing and notarization turn on when the `APPLE_*` secrets listed in the workflow are set; until then builds are
+ad-hoc signed.
 
 Landing page: [kdm-lp](https://github.com/rslhdyt/kdm-lp), live at https://kdm.rslhdyt.dev.

@@ -43,7 +43,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEwMTdEMkU2NjA2MTNBOTgKUldTWU9tRmc1dElYRVBSNjMyQVpSSC9zQVU4bFZTeUFnQkhSVlRSQXdUZDNVaXhoUTNtZE0rV0MK",
       "endpoints": [
-        "https://github.com/rslhdyt/kdm-releases/releases/latest/download/latest.json"
+        "https://github.com/rslhdyt/kamal-desktop-manager/releases/latest/download/latest.json"
       ]
     }
   }
