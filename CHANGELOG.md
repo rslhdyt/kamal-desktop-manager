@@ -6,6 +6,13 @@ All notable changes to Kamal Desktop Manager are documented here. The format is 
 
 ## [Unreleased]
 
+### Added
+
+- Secrets setup: a "Secrets" button (and "Set up secrets" on a missing-secret error) lists the secrets the deploy config
+  uses, marks those already in `.kamal/secrets*`, and generates `kamal secrets fetch` lines for any Kamal password
+  manager adapter (1Password, Bitwarden, LastPass, AWS, GCP, Doppler, Enpass, Passbolt…) or the environment, to copy
+  into the file. "Check" re-reads your shell environment and reloads the config.
+
 ## [0.1.0] - 2026-10-04
 
 ### Added

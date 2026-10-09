@@ -136,12 +136,23 @@ fn which(path_var: &str, bin: &str) -> Option<PathBuf> {
 
 const ENV_MARKER: &str = "__KDM_ENV__";
 
+type EnvCache = Mutex<HashMap<PathBuf, Vec<(String, String)>>>;
+
+fn env_cache() -> &'static EnvCache {
+    static CACHE: std::sync::OnceLock<EnvCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(Mutex::default)
+}
+
+/// Drops the cached login environment so the next launch re-reads the shell rc files.
+pub fn forget_login_env(project: &Path) {
+    env_cache().lock().unwrap().remove(project);
+}
+
 /// The environment an interactive login shell has in `project` (version
 /// managers usually hook in via .zshrc and pick tools per directory).
 /// Captured once per project; anything the rc files print is ignored.
 async fn login_env(project: &Path) -> Result<Vec<(String, String)>> {
-    static CACHE: std::sync::OnceLock<Mutex<HashMap<PathBuf, Vec<(String, String)>>>> = std::sync::OnceLock::new();
-    let cache = CACHE.get_or_init(Mutex::default);
+    let cache = env_cache();
     if let Some(env) = cache.lock().unwrap().get(project) {
         return Ok(env.clone());
     }

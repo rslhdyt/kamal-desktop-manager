@@ -39,6 +39,18 @@ const KNOWN: [RegExp, (m: RegExpMatchArray) => Described][] = [
   })],
   [/has no config\/deploy\.yml/, () => ({ title: "Not a Kamal project", hint: "Pick the folder that contains config/deploy.yml or config/deploy.<destination>.yml." })],
   [/is already added/, () => ({ title: "Project already added" })],
+  [/Secret '([^']+)' not found/, (m) => ({
+    title: `Secret ${m[1]} is missing`,
+    hint: "Kamal reads secrets from .kamal/secrets (or .kamal/secrets.<destination>). Use Set up secrets to generate the lines for your password manager.",
+  })],
+  [/Failed to login|could not login to gcloud|Could not authenticate to Bitwarden Secrets Manager/i, () => ({
+    title: "Password manager sign-in failed",
+    hint: "Kamal Desktop Manager can't answer sign-in prompts. Sign in once in a terminal (or enable your password manager's desktop/CLI integration), export any session token in your shell rc, then Check again.",
+  })],
+  [/(.+ CLI) is not installed/, (m) => ({
+    title: `${m[1]} is not installed`,
+    hint: "Kamal calls the password manager's CLI to fetch secrets. Install it so it's on your login shell's PATH.",
+  })],
   [/kamal config( -d \S+)? failed/, () => ({
     title: "kamal config failed",
     hint: "Kamal Desktop Manager reads config through `kamal config`. Run it in a terminal in the project folder to see the full error (missing secrets, destination, git repo…).",
@@ -55,7 +67,7 @@ export function describeError(error: string): Described {
 }
 
 /** A friendly title and fix for known errors, with the raw message on demand. */
-export function ErrorNotice({ error, onRetry }: { error: string; onRetry?: () => void }) {
+export function ErrorNotice({ error, onRetry, action }: { error: string; onRetry?: () => void; action?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const { title, hint } = describeError(error);
   const detail = title !== error;
@@ -66,8 +78,9 @@ export function ErrorNotice({ error, onRetry }: { error: string; onRetry?: () =>
         <b>{title}</b>
         {hint && <span className="text-sm">{hint}</span>}
         {detail && open && <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs opacity-80">{error}</pre>}
-        {(detail || onRetry) && (
+        {(detail || onRetry || action) && (
           <span className="flex gap-2">
+            {action}
             {detail && (
               <Button size="xs" variant="ghost" onClick={() => setOpen(!open)}>
                 {open ? "Hide details" : "Details"}

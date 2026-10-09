@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, cn, Select, Tabs, Text } from "@cloudflare/kumo";
 import {
   ArrowClockwiseIcon,
+  KeyIcon,
   LockIcon,
   LockOpenIcon,
   PlayIcon,
@@ -20,6 +21,7 @@ import { ConfirmRequest } from "./Confirm";
 import { ErrorNotice } from "./errors";
 import { isLive, startRun } from "./liveRuns";
 import { RunTerminal } from "./RunTerminal";
+import { SecretsDialog } from "./SecretsDialog";
 
 // The base config (no destination) is usually production for single-destination apps.
 const isProduction = (destination: string | null) => destination === null || /prod/i.test(destination);
@@ -54,6 +56,7 @@ export function ProjectView({ project, confirm, onRemove }: Props) {
   const [logSource, setLogSource] = useState<LogSource | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedRun, setSelectedRun] = useState<number | null>(null);
+  const [secretsOpen, setSecretsOpen] = useState(false);
 
   const refreshRuns = useCallback(() => api.runsList(project.id).then(setRuns), [project.id]);
 
@@ -147,6 +150,9 @@ export function ProjectView({ project, confirm, onRemove }: Props) {
         <div className="text-sm text-kumo-subtle min-w-0 flex-1 truncate">
           {project.path}
         </div>
+        <Button size="sm" variant="ghost" icon={<KeyIcon />} onClick={() => setSecretsOpen(true)}>
+          Secrets
+        </Button>
         <Button size="sm" variant="secondary" icon={<ArrowClockwiseIcon />} loading={loading} onClick={() => load(destination)}>
           Reload
         </Button>
@@ -167,7 +173,22 @@ export function ProjectView({ project, confirm, onRemove }: Props) {
         />
       </header>
 
-      {error && <ErrorNotice error={error} onRetry={info ? undefined : () => load(destination)} />}
+      {error && (
+        <ErrorNotice
+          error={error}
+          onRetry={info ? undefined : () => load(destination)}
+          action={
+            /Secret '[^']+' not found/.test(error) && (
+              <Button size="xs" variant="primary" icon={<KeyIcon />} onClick={() => setSecretsOpen(true)}>
+                Set up secrets
+              </Button>
+            )
+          }
+        />
+      )}
+      {secretsOpen && (
+        <SecretsDialog projectId={project.id} destination={destination} onCheck={() => load(destination)} onClose={() => setSecretsOpen(false)} />
+      )}
 
       {info && (
         <>
