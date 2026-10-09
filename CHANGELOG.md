@@ -6,14 +6,20 @@ All notable changes to Kamal Desktop Manager are documented here. The format is 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-09
+
 ### Added
 
 - Secrets setup: a "Secrets" button (and "Set up secrets" on a missing-secret error) lists the secrets the deploy config
   uses, marks those already in `.kamal/secrets*`, and generates `kamal secrets fetch` lines for any Kamal password
   manager adapter (1Password, Bitwarden, LastPass, AWS, GCP, Doppler, Enpass, Passbolt…) or the environment, to copy
   into the file. "Check" re-reads your shell environment and reloads the config.
-- Console tab runs the deploy config's `aliases` (e.g. `shell`, `dbc`) as well as the Rails console, which is now only
-  offered when the app has `bin/rails`.
+- Console tab runs your deploy config's `aliases` (such as `shell` or `dbc`), so apps that don't use Rails get a
+  console too.
+
+### Changed
+
+- The Rails console is offered only for apps that have `bin/rails`.
 
 ## [0.1.0] - 2026-10-04
 
@@ -30,5 +36,6 @@ All notable changes to Kamal Desktop Manager are documented here. The format is 
 - Console tab: an embedded terminal running `kamal app exec -i`.
 - Signed in-app updates.
 
-[Unreleased]: https://github.com/rslhdyt/kamal-desktop-manager/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rslhdyt/kamal-desktop-manager/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rslhdyt/kamal-desktop-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rslhdyt/kamal-desktop-manager/tree/v0.1.0
