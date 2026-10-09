@@ -23,7 +23,7 @@ use crate::console::{ConsoleEvent, Consoles};
 use crate::db::{Project, Run};
 use crate::logs::{LogEvent, LogOptions, LogStreams};
 use crate::pool::SshPool;
-use crate::project::ProjectConfig;
+use crate::project::{Alias, ProjectConfig};
 use crate::proxy::{ProxyRequest, ProxyRoute};
 use crate::runner::{KamalCommand, RunEvent, RunRegistry};
 use crate::secrets::{SecretsScan, SnippetRequest};
@@ -82,6 +82,9 @@ struct ProjectInfo {
     destination: Option<String>,
     has_base_config: bool,
     config: ProjectConfig,
+    aliases: Vec<Alias>,
+    /// Whether `bin/rails` exists, i.e. the Rails console makes sense.
+    rails: bool,
 }
 
 /// Loads config for a destination and remembers it as the project's default.
@@ -96,7 +99,9 @@ async fn project_config(state: State<'_, AppState>, id: i64, destination: Option
     let yaml = runner::output(&project, &args).await.map_err(err)?;
     let config = project::parse_config(&yaml).map_err(err)?;
     db::project_set_destination(&state.pool, id, destination.as_deref()).await.map_err(err)?;
-    Ok(ProjectInfo { destinations, destination, has_base_config, config })
+    let aliases = project::aliases(&dir, destination.as_deref());
+    let rails = dir.join("bin/rails").is_file();
+    Ok(ProjectInfo { destinations, destination, has_base_config, config, aliases, rails })
 }
 
 /// Secret names the destination needs and which ones its secrets files already define.
@@ -225,15 +230,15 @@ async fn console_open(
     state: State<'_, AppState>,
     project_id: i64,
     destination: Option<String>,
+    alias: Option<String>,
     rows: u16,
     cols: u16,
     on_event: Channel<ConsoleEvent>,
 ) -> CmdResult<u64> {
     let project = db::project_get(&state.pool, project_id).await.map_err(err)?;
     let dir = runner::validate_project(&project.path).map_err(err)?;
-    let launch = runner::kamal_launch(&dir, project.kamal_bin.as_deref(), &runner::console_args(&dir, destination.as_deref()))
-        .await
-        .map_err(err)?;
+    let args = runner::console_args(&dir, destination.as_deref(), alias.as_deref()).map_err(err)?;
+    let launch = runner::kamal_launch(&dir, project.kamal_bin.as_deref(), &args).await.map_err(err)?;
     let emit = move |event| {
         let _ = on_event.send(event);
     };
@@ -433,7 +438,7 @@ mod live {
 
         if std::env::var("KDM_LIVE_CONSOLE").is_ok() {
             let dir = std::path::Path::new(&path);
-            let launch = runner::kamal_launch(dir, None, &runner::console_args(dir, None)).await.unwrap();
+            let launch = runner::kamal_launch(dir, None, &runner::console_args(dir, None, None).unwrap()).await.unwrap();
             let consoles = Consoles::default();
             let (ctx, crx) = std::sync::mpsc::channel();
             let id = consoles.open(&launch, 24, 100, move |e| drop(ctx.send(e))).unwrap();

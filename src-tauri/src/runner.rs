@@ -65,10 +65,19 @@ impl KamalCommand {
     }
 }
 
-/// The Rails console: runs in the already-running app container.
-pub fn console_args(project: &Path, destination: Option<&str>) -> Vec<String> {
-    let args = ["app", "exec", "--interactive", "--reuse", "bin/rails console"];
-    with_destination(args.map(String::from).to_vec(), project, destination)
+/// The Rails console (runs in the already-running app container), or one of
+/// the deploy config's `aliases`. Only aliases the config defines are allowed.
+pub fn console_args(project: &Path, destination: Option<&str>, alias: Option<&str>) -> Result<Vec<String>> {
+    let args = match alias {
+        None => ["app", "exec", "--interactive", "--reuse", "bin/rails console"].map(String::from).to_vec(),
+        Some(name) => {
+            if !crate::project::aliases(project, destination).iter().any(|a| a.name == name) {
+                bail!("no alias {name:?} in the deploy config");
+            }
+            vec![name.to_string()]
+        }
+    };
+    Ok(with_destination(args, project, destination))
 }
 
 /// Whether the project has kamal's base `config/deploy.yml`. Without one, each
@@ -420,6 +429,10 @@ mod tests {
             ["lock", "acquire", "-m", "db migration; don't deploy"]
         );
         assert!(KamalCommand::Rollback { version: "abc; rm -rf /".into() }.args(dir, dest).is_err());
+
+        std::fs::write(dir.join("config/deploy.yml"), "service: app\naliases:\n  shell: app exec -i bash\n").unwrap();
+        assert_eq!(console_args(dir, dest, Some("shell")).unwrap(), ["shell", "-d", "staging"]);
+        assert!(console_args(dir, None, Some("deploy")).is_err(), "only configured aliases");
         assert!(KamalCommand::LockAcquire { message: " ".into() }.args(dir, dest).is_err());
     }
 

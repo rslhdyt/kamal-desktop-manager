@@ -32,7 +32,15 @@ export type ProxyRequest = {
   request_id: string;
 };
 export type ConsoleEvent = { kind: "output"; data: string } | { kind: "exit" };
-export type ProjectInfo = { destinations: string[]; destination: string | null; has_base_config: boolean; config: ProjectConfig };
+export type Alias = { name: string; command: string };
+export type ProjectInfo = {
+  destinations: string[];
+  destination: string | null;
+  has_base_config: boolean;
+  config: ProjectConfig;
+  aliases: Alias[];
+  rails: boolean;
+};
 export type Container = {
   id: string;
   name: string;
@@ -111,8 +119,9 @@ export const api = {
   proxyRoutes: (target: SshTarget) => invoke<ProxyRoute[]>("proxy_routes", { target }),
   proxyRequestsSubscribe: (target: SshTarget, services: string[], since: string, onEvent: Channel<ProxyRequest>) =>
     invoke<number>("proxy_requests_subscribe", { target, services, since, onEvent }),
-  consoleOpen: (projectId: number, destination: string | null, rows: number, cols: number, onEvent: Channel<ConsoleEvent>) =>
-    invoke<number>("console_open", { projectId, destination, rows, cols, onEvent }),
+  /** `alias` null opens the Rails console. */
+  consoleOpen: (projectId: number, destination: string | null, alias: string | null, rows: number, cols: number, onEvent: Channel<ConsoleEvent>) =>
+    invoke<number>("console_open", { projectId, destination, alias, rows, cols, onEvent }),
   consoleWrite: (sessionId: number, data: string) => invoke<void>("console_write", { sessionId, data }),
   consoleResize: (sessionId: number, rows: number, cols: number) => invoke<void>("console_resize", { sessionId, rows, cols }),
   consoleClose: (sessionId: number) => invoke<void>("console_close", { sessionId }),
