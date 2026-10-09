@@ -96,6 +96,38 @@ fn accessories(value: &Value, all_hosts: &[String]) -> Vec<Accessory> {
         .collect()
 }
 
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Alias {
+    pub name: String,
+    pub command: String,
+}
+
+/// `aliases:` from the deploy config, read straight from the YAML since
+/// `kamal config` leaves them out. The destination file overrides the base,
+/// like Kamal's merge. A file that isn't plain YAML (ERB blocks) is skipped.
+pub fn aliases(project: &Path, destination: Option<&str>) -> Vec<Alias> {
+    let mut files = vec![project.join("config/deploy.yml")];
+    if let Some(dest) = destination {
+        files.push(project.join(format!("config/deploy.{dest}.yml")));
+    }
+    let mut aliases: Vec<Alias> = vec![];
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(file) else { continue };
+        let Ok(yaml) = serde_yaml::from_str::<Value>(&text) else { continue };
+        let Some(Value::Mapping(map)) = yaml.get("aliases") else { continue };
+        for (name, command) in map {
+            let (Some(name), Some(command)) = (name.as_str(), command.as_str()) else { continue };
+            // Kamal's own rule; also keeps names from parsing as flags.
+            if name.is_empty() || !name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-_".contains(c)) || name.starts_with('-') {
+                continue;
+            }
+            aliases.retain(|a| a.name != name);
+            aliases.push(Alias { name: name.into(), command: command.into() });
+        }
+    }
+    aliases
+}
+
 /// Destinations from `config/deploy.<dest>.yml` files.
 pub fn destinations(project: &Path) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(project.join("config")) else { return vec![] };
@@ -160,5 +192,20 @@ mod tests {
             config.accessories,
             vec![acc("db", &["10.0.0.3"]), acc("redis", &["10.0.0.1", "10.0.0.2"]), acc("search", &["10.0.0.1", "10.0.0.4"])]
         );
+    }
+
+    #[test]
+    fn destination_aliases_override_base() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        std::fs::create_dir_all(dir.join("config")).unwrap();
+        std::fs::write(dir.join("config/deploy.yml"), "service: app\naliases:\n  shell: app exec -i bash\n  console: app exec -i 'bin/rails c'\n  -x: nope\n").unwrap();
+        std::fs::write(dir.join("config/deploy.staging.yml"), "aliases:\n  shell: app exec -i sh\n").unwrap();
+        std::fs::write(dir.join("config/deploy.erb.yml"), "<% if true %>\naliases:\n  x: y\n<% end %>\n").unwrap();
+
+        let names = |dest| aliases(dir, dest).into_iter().map(|a| format!("{}={}", a.name, a.command)).collect::<Vec<_>>();
+        assert_eq!(names(None), ["shell=app exec -i bash", "console=app exec -i 'bin/rails c'"]);
+        assert_eq!(names(Some("staging")), ["console=app exec -i 'bin/rails c'", "shell=app exec -i sh"]);
+        assert_eq!(names(Some("erb")).len(), 2, "unparseable file is skipped");
     }
 }

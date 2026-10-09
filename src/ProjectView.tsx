@@ -315,6 +315,8 @@ export function ProjectView({ project, confirm, onRemove }: Props) {
             key={destination ?? ""}
             projectId={project.id}
             destination={destination}
+            aliases={info.aliases}
+            rails={info.rails}
             target={info.config.primary_host ?? info.config.hosts[0]}
           />
         </div>

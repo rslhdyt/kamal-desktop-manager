@@ -12,6 +12,8 @@ All notable changes to Kamal Desktop Manager are documented here. The format is 
   uses, marks those already in `.kamal/secrets*`, and generates `kamal secrets fetch` lines for any Kamal password
   manager adapter (1Password, Bitwarden, LastPass, AWS, GCP, Doppler, Enpass, Passbolt…) or the environment, to copy
   into the file. "Check" re-reads your shell environment and reloads the config.
+- Console tab runs the deploy config's `aliases` (e.g. `shell`, `dbc`) as well as the Rails console, which is now only
+  offered when the app has `bin/rails`.
 
 ## [0.1.0] - 2026-10-04
 

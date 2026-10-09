@@ -124,8 +124,9 @@ in `ProjectView` is the destination as it appears on container labels; use it wh
   - **Containers:** the App section is a tree grouped by image version, newest first. A version with anything running is
     `active` and starts expanded; the rest are `old`, start collapsed and carry a Rollback button. Accessories are a flat
     list. Rows show `role @ host` when there is more than one host.
-  - **Console** stays mounted while hidden so the session survives tab switches. Containers does the same so expand
-    state survives.
+  - **Console** offers the Rails console (when `bin/rails` exists) and each `aliases:` entry of the deploy config, read
+    from the YAML since `kamal config` omits them. It stays mounted while hidden so the session survives tab switches.
+    Containers does the same so expand state survives.
 
 ### Visual style
 
