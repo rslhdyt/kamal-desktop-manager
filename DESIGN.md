@@ -17,6 +17,9 @@ the project, state comes from the hosts, and every action is a kamal command you
    secrets and destination merging always match the CLI. Actions run the project's own kamal (configured binary →
    `bin/kamal` → `kamal` on the login PATH) inside the project's login-shell environment, so rbenv/mise/asdf pick the
    right Ruby.
+   *Exception:* the secrets setup (`secrets.rs`) reads secret **names** straight from `config/deploy*.yml`, without ERB,
+   because `kamal config` fails while secrets are missing. It only prefills an editable list; it never writes
+   `.kamal/secrets` (the user copies the generated lines) and never reads secret values.
 2. **Allowlisted commands only.** The UI sends a `KamalCommand` enum (`runner.rs`), never raw argv. Remote shell strings are
    built on the Rust side and user input is single-quote escaped (`logs.rs`).
 3. **Safe by default, loud when it matters.**
@@ -62,6 +65,7 @@ the project, state comes from the hosts, and every action is a kamal command you
 │ logs.rs     long-lived remote followers (docker logs -f, proxy log)     │
 │ proxy.rs    kamal-proxy list + JSON request log                         │
 │ project.rs  parse `kamal config` output, list destinations              │
+│ secrets.rs  secret names from deploy*.yml, `.kamal/secrets` snippets     │
 │ db.rs       SQLite (projects, runs) via sqlx + migrations/              │
 └─────────────────────────────────────────────────────────────────────────┘
 ```

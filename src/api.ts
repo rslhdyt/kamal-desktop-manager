@@ -78,6 +78,15 @@ export type KamalCommand =
   | { kind: "deploy" | "redeploy" | "lock_release" | "lock_status" | "app_boot" | "app_stop" }
   | { kind: "rollback"; version: string }
   | { kind: "lock_acquire"; message: string };
+export type SecretsScan = { file: string; keys: { name: string; defined_in: string | null }[] };
+export type SecretSource = "vault" | "env" | "skip";
+export type SnippetRequest = {
+  file: string;
+  adapter: string | null;
+  account: string | null;
+  from: string | null;
+  keys: { name: string; source: SecretSource }[];
+};
 export type RunEvent = { kind: "line"; stream: "stdout" | "stderr"; text: string } | { kind: "exit"; code: number | null };
 
 export const api = {
@@ -85,6 +94,9 @@ export const api = {
   projectList: () => invoke<Project[]>("project_list"),
   projectRemove: (id: number) => invoke<void>("project_remove", { id }),
   projectConfig: (id: number, destination: string | null) => invoke<ProjectInfo>("project_config", { id, destination }),
+  secretsScan: (id: number, destination: string | null) => invoke<SecretsScan>("secrets_scan", { id, destination }),
+  secretsSnippet: (request: SnippetRequest) => invoke<string>("secrets_snippet", { request }),
+  projectEnvReset: (id: number) => invoke<void>("project_env_reset", { id }),
   runStart: (projectId: number, destination: string | null, command: KamalCommand, onEvent: Channel<RunEvent>) =>
     invoke<number>("run_start", { projectId, destination, command, onEvent }),
   clearDockerLogin: (server: string) => invoke<number>("clear_docker_login", { server }),

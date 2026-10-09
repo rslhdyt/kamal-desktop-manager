@@ -8,6 +8,7 @@ mod pool;
 mod project;
 mod proxy;
 mod runner;
+mod secrets;
 mod ssh;
 
 use std::path::PathBuf;
@@ -25,6 +26,7 @@ use crate::pool::SshPool;
 use crate::project::ProjectConfig;
 use crate::proxy::{ProxyRequest, ProxyRoute};
 use crate::runner::{KamalCommand, RunEvent, RunRegistry};
+use crate::secrets::{SecretsScan, SnippetRequest};
 use crate::ssh::SshTarget;
 
 type CmdResult<T> = Result<T, String>;
@@ -95,6 +97,30 @@ async fn project_config(state: State<'_, AppState>, id: i64, destination: Option
     let config = project::parse_config(&yaml).map_err(err)?;
     db::project_set_destination(&state.pool, id, destination.as_deref()).await.map_err(err)?;
     Ok(ProjectInfo { destinations, destination, has_base_config, config })
+}
+
+/// Secret names the destination needs and which ones its secrets files already define.
+#[tauri::command]
+async fn secrets_scan(state: State<'_, AppState>, id: i64, destination: Option<String>) -> CmdResult<SecretsScan> {
+    let project = db::project_get(&state.pool, id).await.map_err(err)?;
+    let dir = runner::validate_project(&project.path).map_err(err)?;
+    // Same fallback as `project_config`: standalone configs always have a destination.
+    let destination = if runner::has_base_config(&dir) { destination } else { destination.or_else(|| project::destinations(&dir).first().cloned()) };
+    Ok(secrets::scan(&dir, destination.as_deref()))
+}
+
+#[tauri::command]
+fn secrets_snippet(request: SnippetRequest) -> CmdResult<String> {
+    secrets::snippet(&request).map_err(err)
+}
+
+/// Forgets the project's captured login-shell environment, so newly exported
+/// variables (e.g. `BW_SESSION`) reach the next kamal run.
+#[tauri::command]
+async fn project_env_reset(state: State<'_, AppState>, id: i64) -> CmdResult<()> {
+    let project = db::project_get(&state.pool, id).await.map_err(err)?;
+    runner::forget_login_env(std::path::Path::new(&project.path));
+    Ok(())
 }
 
 #[tauri::command]
@@ -277,6 +303,9 @@ pub fn run() {
             project_list,
             project_remove,
             project_config,
+            secrets_scan,
+            secrets_snippet,
+            project_env_reset,
             run_start,
             run_cancel,
             clear_docker_login,
