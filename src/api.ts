@@ -104,6 +104,8 @@ export const api = {
   projectConfig: (id: number, destination: string | null) => invoke<ProjectInfo>("project_config", { id, destination }),
   secretsScan: (id: number, destination: string | null) => invoke<SecretsScan>("secrets_scan", { id, destination }),
   secretsSnippet: (request: SnippetRequest) => invoke<string>("secrets_snippet", { request }),
+  envFileGet: (id: number, destination: string | null) => invoke<string | null>("env_file_get", { id, destination }),
+  envFileSet: (id: number, destination: string | null, path: string) => invoke<void>("env_file_set", { id, destination, path }),
   projectEnvReset: (id: number) => invoke<void>("project_env_reset", { id }),
   runStart: (projectId: number, destination: string | null, command: KamalCommand, onEvent: Channel<RunEvent>) =>
     invoke<number>("run_start", { projectId, destination, command, onEvent }),

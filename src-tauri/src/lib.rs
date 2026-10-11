@@ -96,7 +96,8 @@ async fn project_config(state: State<'_, AppState>, id: i64, destination: Option
     let has_base_config = runner::has_base_config(&dir);
     let destination = if has_base_config { destination } else { destination.or_else(|| destinations.first().cloned()) };
     let args = runner::with_destination(vec!["config".into()], &dir, destination.as_deref());
-    let yaml = runner::output(&project, &args).await.map_err(err)?;
+    let env_file = runner::env_file(&state.pool, &project, destination.as_deref()).await.map_err(err)?;
+    let yaml = runner::output(&project, env_file.as_deref(), &args).await.map_err(err)?;
     let config = project::parse_config(&yaml).map_err(err)?;
     db::project_set_destination(&state.pool, id, destination.as_deref()).await.map_err(err)?;
     let aliases = project::aliases(&dir, destination.as_deref());
@@ -109,9 +110,32 @@ async fn project_config(state: State<'_, AppState>, id: i64, destination: Option
 async fn secrets_scan(state: State<'_, AppState>, id: i64, destination: Option<String>) -> CmdResult<SecretsScan> {
     let project = db::project_get(&state.pool, id).await.map_err(err)?;
     let dir = runner::validate_project(&project.path).map_err(err)?;
-    // Same fallback as `project_config`: standalone configs always have a destination.
-    let destination = if runner::has_base_config(&dir) { destination } else { destination.or_else(|| project::destinations(&dir).first().cloned()) };
-    Ok(secrets::scan(&dir, destination.as_deref()))
+    Ok(secrets::scan(&dir, settings_destination(&dir, destination).as_deref()))
+}
+
+/// Same fallback as `project_config`: standalone configs always have a destination.
+fn settings_destination(dir: &std::path::Path, destination: Option<String>) -> Option<String> {
+    if runner::has_base_config(dir) { destination } else { destination.or_else(|| project::destinations(dir).first().cloned()) }
+}
+
+/// The env file kamal runs with for this destination, if any.
+#[tauri::command]
+async fn env_file_get(state: State<'_, AppState>, id: i64, destination: Option<String>) -> CmdResult<Option<String>> {
+    let project = db::project_get(&state.pool, id).await.map_err(err)?;
+    let dir = runner::validate_project(&project.path).map_err(err)?;
+    runner::env_file(&state.pool, &project, settings_destination(&dir, destination).as_deref()).await.map_err(err)
+}
+
+/// Saves the destination's env file (relative to the project); empty turns it off.
+#[tauri::command]
+async fn env_file_set(state: State<'_, AppState>, id: i64, destination: Option<String>, path: String) -> CmdResult<()> {
+    let project = db::project_get(&state.pool, id).await.map_err(err)?;
+    let dir = runner::validate_project(&project.path).map_err(err)?;
+    let path = path.trim();
+    if !path.is_empty() && !dir.join(path).is_file() {
+        return Err(format!("{path} not found in {}", project.path));
+    }
+    db::env_file_set(&state.pool, id, settings_destination(&dir, destination).as_deref(), path).await.map_err(err)
 }
 
 #[tauri::command]
@@ -238,7 +262,8 @@ async fn console_open(
     let project = db::project_get(&state.pool, project_id).await.map_err(err)?;
     let dir = runner::validate_project(&project.path).map_err(err)?;
     let args = runner::console_args(&dir, destination.as_deref(), alias.as_deref()).map_err(err)?;
-    let launch = runner::kamal_launch(&dir, project.kamal_bin.as_deref(), &args).await.map_err(err)?;
+    let env_file = runner::env_file(&state.pool, &project, destination.as_deref()).await.map_err(err)?;
+    let launch = runner::kamal_launch(&dir, project.kamal_bin.as_deref(), env_file.as_deref(), &args).await.map_err(err)?;
     let emit = move |event| {
         let _ = on_event.send(event);
     };
@@ -310,6 +335,8 @@ pub fn run() {
             project_config,
             secrets_scan,
             secrets_snippet,
+            env_file_get,
+            env_file_set,
             project_env_reset,
             run_start,
             run_cancel,
@@ -345,7 +372,7 @@ mod live {
         let project = Project { id: 0, name: "live".into(), path: path.clone(), kamal_bin: None, default_destination: None, created_at: 0 };
 
         let args = runner::with_destination(vec!["config".into()], std::path::Path::new(&path), destination.as_deref());
-        let config = project::parse_config(&runner::output(&project, &args).await.unwrap()).unwrap();
+        let config = project::parse_config(&runner::output(&project, None, &args).await.unwrap()).unwrap();
         println!("config: {config:?}");
 
         let tmp = tempfile::tempdir().unwrap();
@@ -438,7 +465,7 @@ mod live {
 
         if std::env::var("KDM_LIVE_CONSOLE").is_ok() {
             let dir = std::path::Path::new(&path);
-            let launch = runner::kamal_launch(dir, None, &runner::console_args(dir, None, None).unwrap()).await.unwrap();
+            let launch = runner::kamal_launch(dir, None, None, &runner::console_args(dir, None, None).unwrap()).await.unwrap();
             let consoles = Consoles::default();
             let (ctx, crx) = std::sync::mpsc::channel();
             let id = consoles.open(&launch, 24, 100, move |e| drop(ctx.send(e))).unwrap();

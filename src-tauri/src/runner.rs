@@ -120,11 +120,35 @@ impl Launch {
     }
 }
 
+/// The dotenv file loaded for a destination, relative to the project: the saved
+/// one, else `.env.<destination>` when it exists. A saved empty path turns it off.
+pub async fn env_file(pool: &SqlitePool, project: &Project, destination: Option<&str>) -> Result<Option<String>> {
+    Ok(match db::env_file_get(pool, project.id, destination).await? {
+        Some(saved) => Some(saved).filter(|p| !p.is_empty()),
+        None => destination.map(|d| format!(".env.{d}")).filter(|p| Path::new(&project.path).join(p).is_file()),
+    })
+}
+
+/// Adds the env file's variables, overriding the login environment, like
+/// `dotenv -f <file> -- kamal ...`. Values only ever reach the kamal process.
+fn load_env_file(env: &mut Vec<(String, String)>, project: &Path, file: &str) -> Result<()> {
+    let vars = dotenvy::from_path_iter(project.join(file)).with_context(|| format!("reading env file {file}"))?;
+    for var in vars {
+        let (key, value) = var.with_context(|| format!("parsing env file {file}"))?;
+        env.retain(|(k, _)| *k != key);
+        env.push((key, value));
+    }
+    Ok(())
+}
+
 /// Uses the project's configured binary, else its `bin/kamal` binstub, else
 /// `kamal` on the login PATH. Runs in the project's login-shell environment
 /// so rbenv/mise/asdf resolve the right Ruby, without shell startup noise.
-pub async fn kamal_launch(project: &Path, kamal_bin: Option<&str>, args: &[String]) -> Result<Launch> {
+pub async fn kamal_launch(project: &Path, kamal_bin: Option<&str>, env_file: Option<&str>, args: &[String]) -> Result<Launch> {
     let mut env = login_env(project).await?;
+    if let Some(file) = env_file {
+        load_env_file(&mut env, project, file)?;
+    }
     env.retain(|(k, _)| k != "SSHKIT_COLOR");
     env.push(("SSHKIT_COLOR".into(), "1".into()));
     let path_var = env.iter().find(|(k, _)| k == "PATH").map(|(_, v)| v.as_str()).unwrap_or("");
@@ -235,8 +259,8 @@ pub fn validate_project(path: &str) -> Result<PathBuf> {
 
 /// Runs kamal to completion and returns stdout. Stderr goes into the error
 /// only — stdout may hold resolved config and must not be logged.
-pub async fn output(project: &Project, args: &[String]) -> Result<String> {
-    let launch = kamal_launch(Path::new(&project.path), project.kamal_bin.as_deref(), args).await?;
+pub async fn output(project: &Project, env_file: Option<&str>, args: &[String]) -> Result<String> {
+    let launch = kamal_launch(Path::new(&project.path), project.kamal_bin.as_deref(), env_file, args).await?;
     let out = launch.command().output().await.context("spawning kamal")?;
     if !out.status.success() {
         bail!("kamal {} failed: {}", args.join(" "), String::from_utf8_lossy(&out.stderr).trim());
@@ -321,7 +345,8 @@ pub async fn start(
     let run = db::run_insert(pool, new, |id| runs_dir.join(format!("{id}.log")).to_string_lossy().into_owned()).await?;
 
     let spawned = async {
-        let launch = kamal_launch(&project_dir, project.kamal_bin.as_deref(), &args).await?;
+        let env_file = env_file(pool, project, destination.as_deref()).await?;
+        let launch = kamal_launch(&project_dir, project.kamal_bin.as_deref(), env_file.as_deref(), &args).await?;
         let log = File::create(&run.log_path).context("creating run log")?;
         let child = launch
             .command()
@@ -449,6 +474,32 @@ mod tests {
             KamalCommand::Deploy.args(dir, Some("staging")).unwrap(),
             ["deploy", "-c", "config/deploy.staging.yml"]
         );
+    }
+
+    #[tokio::test]
+    async fn env_file_defaults_and_overrides() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pool = db::memory().await;
+        let mut project = fake_project(tmp.path());
+        project.id = db::project_add(&pool, "app", &project.path).await.unwrap().id;
+        let dest = Some("staging");
+        assert_eq!(env_file(&pool, &project, dest).await.unwrap(), None, "no .env.staging yet");
+
+        std::fs::write(tmp.path().join(".env.staging"), "# c\nexport PASS=\"s3 cret\"\nPATH=/env\n").unwrap();
+        assert_eq!(env_file(&pool, &project, dest).await.unwrap().as_deref(), Some(".env.staging"));
+        assert_eq!(env_file(&pool, &project, None).await.unwrap(), None, "no default without a destination");
+
+        let mut env = vec![("PATH".to_string(), "/login".to_string()), ("HOME".into(), "/h".into())];
+        load_env_file(&mut env, tmp.path(), ".env.staging").unwrap();
+        env.sort();
+        assert_eq!(env, [("HOME".into(), "/h".into()), ("PASS".into(), "s3 cret".into()), ("PATH".into(), "/env".into())]);
+
+        db::env_file_set(&pool, project.id, dest, "").await.unwrap();
+        assert_eq!(env_file(&pool, &project, dest).await.unwrap(), None, "turned off");
+        db::env_file_set(&pool, project.id, dest, ".env.missing").await.unwrap();
+        let file = env_file(&pool, &project, dest).await.unwrap().unwrap();
+        let err = load_env_file(&mut env, tmp.path(), &file).unwrap_err();
+        assert!(format!("{err:#}").contains("reading env file .env.missing"));
     }
 
     /// A project whose bin/kamal is a script: prints its args, then sleeps.
