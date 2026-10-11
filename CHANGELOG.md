@@ -6,6 +6,15 @@ All notable changes to Kamal Desktop Manager are documented here. The format is 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-11
+
+### Added
+
+- Env files: kamal now runs with `.env.<destination>` (such as `.env.staging`) loaded into its environment when the
+  file exists, the same as `dotenv -f .env.staging -- kamal …`. This fixes deploys failing with empty secrets (for
+  example `docker login` with no password) when `.kamal/secrets` reads values from the environment. Set a different
+  file, or turn it off, under "Env file" in the Secrets dialog.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added
@@ -36,6 +45,7 @@ All notable changes to Kamal Desktop Manager are documented here. The format is 
 - Console tab: an embedded terminal running `kamal app exec -i`.
 - Signed in-app updates.
 
-[Unreleased]: https://github.com/rslhdyt/kamal-desktop-manager/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/rslhdyt/kamal-desktop-manager/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/rslhdyt/kamal-desktop-manager/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rslhdyt/kamal-desktop-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rslhdyt/kamal-desktop-manager/tree/v0.1.0
