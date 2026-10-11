@@ -68,7 +68,7 @@ const SOURCES: Record<SecretSource, string> = { vault: "Password manager", env: 
 
 type Props = { projectId: number; destination: string | null; onCheck: () => void; onClose: () => void };
 
-/** Generates `.kamal/secrets` lines to copy. kdm never writes the file or reads secret values. */
+/** Generates `.kamal/secrets` lines to copy, and sets the env file kamal runs with. kdm never writes either file. */
 export function SecretsDialog({ projectId, destination, onCheck, onClose }: Props) {
   const [scan, setScan] = useState<SecretsScan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,9 +81,11 @@ export function SecretsDialog({ projectId, destination, onCheck, onClose }: Prop
   const [snippet, setSnippet] = useState("");
   const [snippetError, setSnippetError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [envFile, setEnvFile] = useState("");
 
   useEffect(() => {
     api.secretsScan(projectId, destination).then(setScan, (e) => setError(String(e)));
+    api.envFileGet(projectId, destination).then((f) => setEnvFile(f ?? ""), (e) => setError(String(e)));
   }, [projectId, destination]);
 
   const keys = scan?.keys ?? [];
@@ -132,12 +134,27 @@ export function SecretsDialog({ projectId, destination, onCheck, onClose }: Prop
         <Dialog.Title className="text-lg font-semibold">Set up secrets</Dialog.Title>
         <Dialog.Description className="text-kumo-subtle">
           Generates lines for <code className="font-mono">{scan?.file ?? ".kamal/secrets"}</code> that fetch secrets from your password manager.
-          Kamal Desktop Manager doesn't write the file or read any secret values.
+          Kamal Desktop Manager doesn't write the file, and env file values go only to kamal.
         </Dialog.Description>
         {error && <ErrorNotice error={error} />}
 
         {scan && (
           <>
+            <div className="flex flex-col gap-1">
+              <Input
+                size="sm"
+                className="w-56"
+                label="Env file"
+                placeholder={`.env.${destination ?? "staging"}`}
+                value={envFile}
+                onChange={(e) => setEnvFile(e.target.value)}
+              />
+              <Text variant="secondary" size="sm">
+                Loaded into kamal's environment for this destination, like <code className="font-mono">dotenv -f</code>. Pick Environment below for
+                keys it defines. Leave empty to turn it off.
+              </Text>
+            </div>
+
             <div className="flex flex-wrap items-end gap-2">
               <Select
                 label="Password manager"
@@ -219,6 +236,11 @@ export function SecretsDialog({ projectId, destination, onCheck, onClose }: Prop
           <Button
             variant="primary"
             onClick={async () => {
+              try {
+                await api.envFileSet(projectId, destination, envFile);
+              } catch (e) {
+                return setError(String(e));
+              }
               await api.projectEnvReset(projectId);
               onClose();
               onCheck();

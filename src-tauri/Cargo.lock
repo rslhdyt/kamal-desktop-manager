@@ -2488,6 +2488,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "dirs 7.0.0",
+ "dotenvy",
  "libc",
  "portable-pty",
  "russh",

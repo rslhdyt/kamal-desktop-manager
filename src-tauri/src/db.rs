@@ -94,6 +94,26 @@ pub async fn project_set_destination(pool: &SqlitePool, id: i64, destination: Op
     Ok(())
 }
 
+/// The saved env file for a destination: `None` if never set, `Some("")` if turned off.
+pub async fn env_file_get(pool: &SqlitePool, project_id: i64, destination: Option<&str>) -> Result<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT path FROM env_files WHERE project_id = ? AND destination = ?")
+        .bind(project_id)
+        .bind(destination.unwrap_or(""))
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|(p,)| p))
+}
+
+pub async fn env_file_set(pool: &SqlitePool, project_id: i64, destination: Option<&str>, path: &str) -> Result<()> {
+    sqlx::query("INSERT INTO env_files (project_id, destination, path) VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET path = excluded.path")
+        .bind(project_id)
+        .bind(destination.unwrap_or(""))
+        .bind(path)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 /// Deletes the project and its runs; returns the run log paths to clean up.
 pub async fn project_remove(pool: &SqlitePool, id: i64) -> Result<Vec<String>> {
     let logs: Vec<(String,)> = sqlx::query_as("SELECT log_path FROM runs WHERE project_id = ?")
@@ -202,6 +222,12 @@ mod tests {
         assert_eq!(moved, format!("/moved/logs/{}.log", run.id));
         rebase_log_paths(&pool, "/elsewhere", "/x").await.unwrap();
         assert_eq!(run_get(&pool, run.id).await.unwrap().log_path, moved, "other prefixes untouched");
+
+        assert_eq!(env_file_get(&pool, project.id, Some("staging")).await.unwrap(), None);
+        env_file_set(&pool, project.id, Some("staging"), ".env.staging").await.unwrap();
+        env_file_set(&pool, project.id, Some("staging"), "").await.unwrap();
+        assert_eq!(env_file_get(&pool, project.id, Some("staging")).await.unwrap().as_deref(), Some(""));
+        assert_eq!(env_file_get(&pool, project.id, None).await.unwrap(), None);
 
         assert_eq!(project_remove(&pool, project.id).await.unwrap(), vec![moved]);
         assert!(runs_list(&pool, project.id, 10).await.unwrap().is_empty(), "runs cascade");
